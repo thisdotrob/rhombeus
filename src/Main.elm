@@ -1,13 +1,9 @@
--- Input a user name and password. Make sure the password matches.
---
--- Read how it works:
---   https://guide.elm-lang.org/architecture/forms.html
---
-
 import Browser
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onInput)
+import Html.Events exposing (..)
+import Http
+import Json.Decode as JD exposing (Decoder, field, string, list, dict)
 
 
 
@@ -15,23 +11,27 @@ import Html.Events exposing (onInput)
 
 
 main =
-  Browser.sandbox { init = init, update = update, view = view }
+  Browser.element
+    { init = init
+    , update = update
+    , subscriptions = subscriptions
+    , view = view
+    }
 
 
 
 -- MODEL
 
 
-type alias Model =
-  { name : String
-  , password : String
-  , passwordAgain : String
-  }
+type Model
+  = Failure
+  | Loading
+  | Success (List Transaction)
 
 
-init : Model
-init =
-  Model "" "" ""
+init : () -> (Model, Cmd Msg)
+init _ =
+  (Loading, getTransactions)
 
 
 
@@ -39,22 +39,32 @@ init =
 
 
 type Msg
-  = Name String
-  | Password String
-  | PasswordAgain String
+  = GetTransactions
+  | GotTransactions (Result Http.Error (List Transaction))
 
 
-update : Msg -> Model -> Model
+update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
-    Name name ->
-      { model | name = name }
+    GetTransactions ->
+      (Loading, getTransactions)
 
-    Password password ->
-      { model | password = password }
+    GotTransactions result ->
+      case result of
+        Ok transactionList ->
+          (Success transactionList, Cmd.none)
 
-    PasswordAgain password ->
-      { model | passwordAgain = password }
+        Err _ ->
+          (Failure, Cmd.none)
+
+
+
+-- SUBSCRIPTIONS
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+  Sub.none
 
 
 
@@ -64,21 +74,78 @@ update msg model =
 view : Model -> Html Msg
 view model =
   div []
-    [ viewInput "text" "Name" model.name Name
-    , viewInput "password" "Password" model.password Password
-    , viewInput "password" "Re-enter Password" model.passwordAgain PasswordAgain
-    , viewValidation model
+    [ viewHeader
+    , viewBody model
     ]
 
+viewHeader : Html Msg
+viewHeader =
+  h2 [] [ text "Transactions" ]
 
-viewInput : String -> String -> String -> (String -> msg) -> Html msg
-viewInput t p v toMsg =
-  input [ type_ t, placeholder p, value v, onInput toMsg ] []
+viewBody : Model -> Html Msg
+viewBody model =
+  case model of
+    Failure ->
+      div []
+        [ text "I could not load transactions for some reason. "
+        , button [ onClick GetTransactions ] [ text "Try Again!" ]
+        ]
+
+    Loading ->
+      text "Loading..."
+
+    Success transactionList ->
+      div []
+        [ button [ onClick GetTransactions, style "display" "block" ] [ text "Refresh" ]
+        , viewTransactionList transactionList
+        ]
+
+viewTransactionList : (List Transaction) -> Html Msg
+viewTransactionList transactionList =
+  table []
+    [ thead [] [ text "Ref", text "Date", text "Amount", text "Counter Party" ]
+    , tbody [] (List.map viewTransaction transactionList)
+    ]
+
+viewTransaction : Transaction -> Html Msg
+viewTransaction transaction =
+    tr [] [ td [] [ text transaction.reference ]
+          , td [] [ text transaction.transactionDate ]
+          , td [] [ text transaction.minorUnits ]
+          , td [] [ text transaction.counterPartyName ]
+          ]
 
 
-viewValidation : Model -> Html msg
-viewValidation model =
-  if model.password == model.passwordAgain then
-    div [ style "color" "green" ] [ text "OK" ]
-  else
-    div [ style "color" "red" ] [ text "Passwords do not match!" ]
+
+-- HTTP
+
+
+getTransactions : Cmd Msg
+getTransactions =
+  Http.get
+    { url = "http://localhost:4567/amex"
+    , expect = Http.expectJson GotTransactions transactionListDecoder
+    }
+
+type alias Transaction =
+  { reference : String
+  , transactionDate : String
+  , processDate : String
+  , minorUnits : String
+  , counterPartyName : String
+  , description : String
+  }
+
+transactionDecoder : Decoder Transaction
+transactionDecoder =
+  JD.map6 Transaction
+      (field "reference" string)
+      (field "transaction_date" string)
+      (field "process_date" string)
+      (field "minor_units" string)
+      (field "counter_party_name" string)
+      (field "description" string)
+
+transactionListDecoder : Decoder (List Transaction)
+transactionListDecoder =
+  JD.list transactionDecoder
