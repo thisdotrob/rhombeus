@@ -3,16 +3,13 @@ require 'pg'
 require 'sinatra'
 
 conn = PG.connect( dbname: 'postgres' )
-conn.exec( "SELECT * FROM pg_stat_activity" ) do |result|
-  puts "     PID | User             | Query"
-  result.each do |row|
-    puts " %7d | %-16s | %s " %
-         row.values_at('pid', 'usename', 'current_query')
-  end
-end
 
 get '/' do
   send_file File.join(settings.public_folder, 'index.html')
+end
+
+get '/update_tags' do
+  send_file File.join(settings.public_folder, 'update_tags.html')
 end
 
 get '/amex' do
@@ -32,5 +29,14 @@ get '/starling' do
       response.push row
     end
     response.to_json
+  end
+end
+
+post '/tags' do
+  tags = request.body.read.split
+  tags = tags.map { |tag| "('" + tag + "')" }
+  values = tags.join(",")
+  conn.exec("INSERT INTO tags (value) VALUES " + values) do |result|
+    puts result
   end
 end
