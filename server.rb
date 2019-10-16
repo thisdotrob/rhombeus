@@ -50,3 +50,10 @@ post '/tags' do
     puts result
   end
 end
+
+post '/delete_tag' do
+  tag_id = request.body.read
+  conn.exec( "DELETE FROM tags WHERE id = " + tag_id ) do |result|
+    puts result
+  end
+end

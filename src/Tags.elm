@@ -15,7 +15,7 @@ main =
 
 type alias Model =
     { content : String
-    , tags : (List String)
+    , tags : (List Tag)
     }
 
 init : () -> (Model, Cmd Msg)
@@ -28,7 +28,9 @@ type Msg
     = Change String
     | Submit
     | SavedTags (Result Http.Error String)
-    | GotTags (Result Http.Error (List String))
+    | GotTags (Result Http.Error (List Tag))
+    | Delete Tag
+    | DeletedTag (Result Http.Error String)
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -49,6 +51,16 @@ update msg model =
                     ({ model | tags = tags }, Cmd.none)
                 Err _ ->
                     ({ model | content = "Failure!" }, Cmd.none)
+        Delete tag ->
+                    ({ model | content = "Deleting..." }, (deleteTag tag))
+        DeletedTag result ->
+            case result of
+                Ok _ ->
+                    ({ model | content = "Success!" }, getTags)
+                Err _ ->
+                    ({ model | content = "Failure!" }, Cmd.none)
+
+
 
 subscriptions : Model -> Sub Msg
 subscriptions model = Sub.none
@@ -58,14 +70,13 @@ view model =
     div []
         [ input [ placeholder "Enter new tags", value model.content, onInput Change ] []
         , button [ onClick Submit ] [ text "Submit" ]
-        , table [] [ thead [] [ text "Tag" ]
-                   , tbody [] (List.map tagRow model.tags)
-                   ]
+        , table [] [ tbody [] (List.map tagRow model.tags) ]
         ]
 
-tagRow : String -> Html Msg
+tagRow : Tag -> Html Msg
 tagRow tag =
-    tr [] [ td [] [ text tag ] ]
+    tr [] [ td [] [ text tag.value
+                  , button [ onClick (Delete tag) ] [ text "X" ] ] ]
 
 getTags : Cmd Msg
 getTags =
@@ -74,11 +85,18 @@ getTags =
       , expect = Http.expectJson GotTags tagsDecoder
       }
 
-tagsDecoder : Decoder (List String)
+type alias Tag =
+    { value : String
+    , id : String
+    }
+
+tagsDecoder : Decoder (List Tag)
 tagsDecoder = JD.list tagDecoder
 
-tagDecoder : Decoder String
-tagDecoder = JD.field "value" JD.string
+tagDecoder : Decoder Tag
+tagDecoder = JD.map2 Tag
+             (JD.field "value" JD.string)
+             (JD.field "id" JD.string)
 
 submitTags : String -> Cmd Msg
 submitTags tags =
@@ -87,3 +105,11 @@ submitTags tags =
       , expect = Http.expectString SavedTags
       , body = Http.stringBody "text/plain" tags
       }
+
+deleteTag : Tag -> Cmd Msg
+deleteTag tag =
+    Http.post
+        { url = "http://localhost:4567/delete_tag"
+        , expect = Http.expectString DeletedTag
+        , body = Http.stringBody "text/plain" tag.id
+        }
