@@ -32,11 +32,21 @@ get '/starling' do
   end
 end
 
+get '/tags' do
+  conn.exec( "SELECT * FROM tags" ) do |result|
+    response = []
+    result.each do |row|
+      response.push row
+    end
+    response.to_json
+  end
+end
+
 post '/tags' do
   tags = request.body.read.split
   tags = tags.map { |tag| "('" + tag + "')" }
   values = tags.join(",")
-  conn.exec("INSERT INTO tags (value) VALUES " + values) do |result|
+  conn.exec( "INSERT INTO tags (value) VALUES " + values ) do |result|
     puts result
   end
 end
