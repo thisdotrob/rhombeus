@@ -12,8 +12,17 @@ get '/update_tags' do
   send_file File.join(settings.public_folder, 'update_tags.html')
 end
 
+amex_query = 'SELECT at.*,'\
+            ' COALESCE(string_agg(t.value, \' \'), \'\') AS tags'\
+            ' FROM amex_transactions AS at'\
+            ' LEFT JOIN amex_transactions_tags AS att'\
+            ' ON at.reference = att.transaction_id'\
+            ' LEFT JOIN tags AS t'\
+            ' ON t.id = att.tag_id'\
+            ' GROUP BY at.reference;'\
+
 get '/amex' do
-  conn.exec( "SELECT * FROM amex_transactions" ) do |result|
+  conn.exec(amex_query) do |result|
     response = []
     result.each do |row|
       response.push row

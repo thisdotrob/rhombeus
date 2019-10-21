@@ -5,11 +5,6 @@ import Html.Events exposing (..)
 import Http
 import Json.Decode as JD exposing (Decoder, field, string, list, dict)
 
-
-
--- MAIN
-
-
 main =
   Browser.element
     { init = init
@@ -18,58 +13,42 @@ main =
     , view = view
     }
 
+type Status = Loading
+    | Success
+    | Failure
 
-
--- MODEL
-
-
-type Model
-  = Failure
-  | Loading
-  | Success (List Transaction)
-
+type alias Model
+  = { transactions : (List Transaction)
+    , status : Status
+    }
 
 init : () -> (Model, Cmd Msg)
 init _ =
-  (Loading, getTransactions)
-
-
-
--- UPDATE
-
+  ({ status = Loading, transactions = [] }, getTransactions)
 
 type Msg
   = GetTransactions
   | GotTransactions (Result Http.Error (List Transaction))
 
-
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
     GetTransactions ->
-      (Loading, getTransactions)
+      ({ model | status = Loading}, getTransactions)
 
     GotTransactions result ->
       case result of
         Ok transactionList ->
-          (Success transactionList, Cmd.none)
+          ({ model | status = Success, transactions = transactionList }
+          , Cmd.none
+          )
 
         Err _ ->
-          (Failure, Cmd.none)
-
-
-
--- SUBSCRIPTIONS
-
+          ({ model | status = Failure }, Cmd.none)
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
   Sub.none
-
-
-
--- VIEW
-
 
 view : Model -> Html Msg
 view model =
@@ -84,7 +63,7 @@ viewHeader =
 
 viewBody : Model -> Html Msg
 viewBody model =
-  case model of
+  case model.status of
     Failure ->
       div []
         [ text "I could not load transactions for some reason. "
@@ -94,10 +73,10 @@ viewBody model =
     Loading ->
       text "Loading..."
 
-    Success transactionList ->
+    Success ->
       div []
         [ button [ onClick GetTransactions, style "display" "block" ] [ text "Refresh" ]
-        , viewTransactionList transactionList
+        , viewTransactionList model.transactions
         ]
 
 viewTransactionList : (List Transaction) -> Html Msg
@@ -113,12 +92,8 @@ viewTransaction transaction =
           , td [] [ text transaction.transactionDate ]
           , td [] [ text transaction.minorUnits ]
           , td [] [ text transaction.counterPartyName ]
+          , td [] [ text transaction.tags ]
           ]
-
-
-
--- HTTP
-
 
 getTransactions : Cmd Msg
 getTransactions =
@@ -134,17 +109,19 @@ type alias Transaction =
   , minorUnits : String
   , counterPartyName : String
   , description : String
+  , tags : String
   }
 
 transactionDecoder : Decoder Transaction
 transactionDecoder =
-  JD.map6 Transaction
+  JD.map7 Transaction
       (field "reference" string)
       (field "transaction_date" string)
       (field "process_date" string)
       (field "minor_units" string)
       (field "counter_party_name" string)
       (field "description" string)
+      (field "tags" string)
 
 transactionListDecoder : Decoder (List Transaction)
 transactionListDecoder =
