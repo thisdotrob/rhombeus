@@ -82,7 +82,14 @@ viewBody model =
 viewTransactionList : (List Transaction) -> Html Msg
 viewTransactionList transactionList =
   table []
-    [ thead [] [ text "Ref", text "Date", text "Amount", text "Counter Party" ]
+    [ thead []
+          [ tr [] [ td [] [ text "Reference" ]
+                  , td [] [ text "Date" ]
+                  , td [] [ text "Amount" ]
+                  , td [] [ text "Description" ]
+                  , td [] [ text "Tags" ]
+                  ]
+          ]
     , tbody [] (List.map viewTransaction transactionList)
     ]
 
