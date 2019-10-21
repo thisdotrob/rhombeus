@@ -1,10 +1,10 @@
-DROP TABLE IF EXISTS tags;
+DROP TABLE IF EXISTS tags CASCADE;
 DROP TABLE IF EXISTS starling_transactions_tags;
 DROP TABLE IF EXISTS amex_transactions_tags;
 
 CREATE TABLE IF NOT EXISTS tags (
        id SERIAL PRIMARY KEY,
-       value TEXT CHECK (value ~ '^[A-Za-z0-9_]+$')
+       value TEXT UNIQUE CHECK (value ~ '^[a-z0-9_]+$')
 );
 
 CREATE TABLE IF NOT EXISTS starling_transactions_tags (
