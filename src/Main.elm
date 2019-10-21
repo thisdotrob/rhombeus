@@ -74,10 +74,7 @@ viewBody model =
       text "Loading..."
 
     Success ->
-      div []
-        [ button [ onClick GetTransactions, style "display" "block" ] [ text "Refresh" ]
-        , viewTransactionList model.transactions
-        ]
+      div [] [ viewTransactionList model.transactions ]
 
 viewTransactionList : (List Transaction) -> Html Msg
 viewTransactionList transactionList =
