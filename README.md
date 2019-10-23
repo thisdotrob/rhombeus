@@ -10,7 +10,7 @@ Ruby (v2.6.5) Postgres (v11.5) Elm (v0.19)
 
 Install the dependencies with `bundle install`.
 
-Compile the Elm source with `elm make src/Main.elm --output=public/main.js && elm make src/Tags.elm --output=public/update_tags.js`.
+Compile the Elm source with `make Main.elm Tags.elm`.
 
 Start the server with `ruby server.rb`.
 

@@ -18,27 +18,31 @@ type Status = Loading
     | Success
     | Failure
 
+type Source = Amex | Starling
+
 type alias Model
   = { transactions : (List Transaction)
     , status : Status
+    , source : Source
     }
 
 init : () -> (Model, Cmd Msg)
 init _ =
-  ({ status = Loading , transactions = [] }
-  , getTransactions)
+  ({ status = Loading , transactions = [], source = Amex }
+  , getTransactions Amex)
 
 type Msg
   = GetTransactions
   | GotTransactions (Result Http.Error (List Transaction))
   | UpdateTags String String
   | PostTags
+  | SwitchSource Source
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
     GetTransactions ->
-      ({ model | status = Loading }, getTransactions)
+      ({ model | status = Loading }, getTransactions model.source)
 
     GotTransactions result ->
       case result of
@@ -59,11 +63,14 @@ update msg model =
 
     PostTags ->
         ({ model | status = Loading }
-        , postTags (List.filter (\t -> t.tagsUpdated) model.transactions))
+        , postTags model.source (List.filter (\t -> t.tagsUpdated) model.transactions))
+
+    SwitchSource newSource ->
+        ({ model | source = newSource }, getTransactions newSource)
 
 maybeUpdateTags : String -> String -> Transaction -> Transaction
-maybeUpdateTags ref newTags transaction =
-    if transaction.reference  == ref then
+maybeUpdateTags id newTags transaction =
+    if transaction.id  == id then
         { transaction | tags = newTags, tagsUpdated = True }
     else
         transaction
@@ -75,13 +82,16 @@ subscriptions model =
 view : Model -> Html Msg
 view model =
   div []
-    [ viewHeader
+    [ viewHeader model
     , viewBody model
     ]
 
-viewHeader : Html Msg
-viewHeader =
-  h2 [] [ text "Transactions" ]
+viewHeader : Model -> Html Msg
+viewHeader model =
+    h2 [] [ text (case model.source of
+                      Amex -> "Amex"
+                      Starling -> "Starling")
+          ]
 
 viewBody : Model -> Html Msg
 viewBody model =
@@ -97,6 +107,9 @@ viewBody model =
 
     Success ->
       div [] [ button [ onClick PostTags ] [ text "Save" ]
+             , button [ onClick (SwitchSource (case model.source of
+                                                  Amex -> Starling
+                                                  Starling -> Amex))] [ text "Switch source" ]
              , div [ class "verticalDivider"] []
              , viewTransactionList model.transactions
              ]
@@ -116,44 +129,42 @@ viewTransactionList transactionList =
 
 viewTransaction : Transaction -> Html Msg
 viewTransaction transaction =
-    tr [] [ td [] [ text transaction.transactionDate ]
-          , td [] [ text transaction.minorUnits ]
-          , td [] [ text transaction.counterPartyName ]
+    tr [] [ td [] [ text transaction.date ]
+          , td [] [ text transaction.amount ]
+          , td [] [ text transaction.description ]
           , td [] [ input
                         [ placeholder "Enter some tags..."
                         , value transaction.tags
-                        , onInput (UpdateTags transaction.reference)
+                        , onInput (UpdateTags transaction.id)
                         ]
                         []
                   ]
           ]
 
-getTransactions : Cmd Msg
-getTransactions =
+getTransactions : Source -> Cmd Msg
+getTransactions source =
   Http.get
-    { url = "http://localhost:4567/amex"
+    { url = case source of
+                Starling -> "http://localhost:4567/starling/transactions"
+                Amex -> "http://localhost:4567/amex/transactions"
     , expect = Http.expectJson GotTransactions transactionListDecoder
     }
 
 type alias Transaction =
   { tagsUpdated : Bool
-  , reference : String
-  , transactionDate : String
-  , processDate : String
-  , minorUnits : String
-  , counterPartyName : String
+  , id : String
+  , date : String
+  , amount : String
   , description : String
   , tags : String
   }
 
 transactionDecoder : Decoder Transaction
 transactionDecoder =
-  JD.map7 (Transaction False)
-      (field "reference" string)
-      (field "transaction_date" string)
-      (field "process_date" string)
-      (field "minor_units" string)
-      (field "counter_party_name" string)
+  JD.map5 (Transaction False)
+      (field "id" string)
+      (field "date" string)
+      (field "amount" string)
       (field "description" string)
       (field "tags" string)
 
@@ -163,11 +174,13 @@ transactionListDecoder =
 
 transactionEncoder : Transaction -> List (String, JE.Value)
 transactionEncoder t =
-  [("reference", JE.string t.reference), ("tags", JE.string t.tags)]
+  [("id", JE.string t.id), ("tags", JE.string t.tags)]
 
-postTags : List Transaction -> Cmd Msg
-postTags transactions =
+postTags : Source -> List Transaction -> Cmd Msg
+postTags source transactions =
     Http.post
-        { url = "http://localhost:4567/update_tags"
+        { url = case source of
+                    Starling -> "http://localhost:4567/starling/update_tags"
+                    Amex -> "http://localhost:4567/amex/update_tags"
         , expect = Http.expectJson GotTransactions transactionListDecoder
         , body = Http.jsonBody (JE.list JE.object (List.map transactionEncoder transactions)) }

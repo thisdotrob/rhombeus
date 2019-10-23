@@ -81,7 +81,7 @@ tagRow tag =
 getTags : Cmd Msg
 getTags =
   Http.get
-      { url = "http://localhost:4567/tags"
+      { url = "http://localhost:4567/tags/all"
       , expect = Http.expectJson GotTags tagsDecoder
       }
 
