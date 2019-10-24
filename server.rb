@@ -15,7 +15,8 @@ amex_query = 'SELECT at.reference as id, '\
              'ON at.reference = att.transaction_id '\
              'LEFT JOIN tags AS t '\
              'ON t.id = att.tag_id '\
-             'GROUP BY at.reference;'
+             'GROUP BY at.reference '\
+             'ORDER BY at.transaction_date DESC;'
 
 starling_query = 'SELECT st.feed_item_uid as id, '\
                  '       st.transaction_time as date, '\
@@ -27,7 +28,8 @@ starling_query = 'SELECT st.feed_item_uid as id, '\
                  'ON st.feed_item_uid = stt.transaction_id '\
                  'LEFT JOIN tags AS t '\
                  'ON t.id = stt.tag_id '\
-                 'GROUP BY st.feed_item_uid;'
+                 'GROUP BY st.feed_item_uid '\
+                 'ORDER BY st.transaction_time DESC;'
 
 def upsert_tags_query (tags)
   'INSERT INTO tags (value) VALUES ' + tags.map { |tag| "('" + tag + "')" }.join(",") + 'ON CONFLICT (value) DO UPDATE ' + 'SET value = EXCLUDED.value ' + 'RETURNING id, value;'
