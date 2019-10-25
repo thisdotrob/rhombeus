@@ -16,7 +16,7 @@ main =
 
 type Status = Loading
     | Success
-    | Failure
+    | Failure String
 
 type Source = Amex | Starling
 
@@ -51,8 +51,10 @@ update msg model =
           , Cmd.none
           )
 
-        Err _ ->
-          ({ model | status = Failure }, Cmd.none)
+        Err e ->
+            let errMsg = (getErrMsg e)
+            in
+            ({ model | status = Failure errMsg }, Cmd.none)
 
     UpdateTags ref newTags ->
         ({ model
@@ -67,6 +69,15 @@ update msg model =
 
     SwitchSource newSource ->
         ({ model | source = newSource }, getTransactions newSource)
+
+getErrMsg : Http.Error -> String
+getErrMsg err =
+    case err of
+        Http.BadUrl msg -> msg
+        Http.Timeout -> "Timeout"
+        Http.NetworkError -> "Network error"
+        Http.BadStatus status -> "Bad status: " ++ (String.fromInt status)
+        Http.BadBody msg -> msg
 
 maybeUpdateTags : String -> String -> Transaction -> Transaction
 maybeUpdateTags id newTags transaction =
@@ -96,9 +107,10 @@ viewHeader model =
 viewBody : Model -> Html Msg
 viewBody model =
   case model.status of
-    Failure ->
+    Failure errMsg ->
       div []
-        [ text "I could not load transactions for some reason. "
+        [ div [] [ text "I could not load transactions for some reason.\n" ]
+        , div [] [ text errMsg ]
         , button [ onClick GetTransactions ] [ text "Try Again!" ]
         ]
 
