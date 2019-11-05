@@ -3,7 +3,7 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
 import Http
-import Json.Decode as JD exposing (Decoder, field, string, list, dict)
+import Json.Decode as JD exposing (Decoder, field, float, string, list, dict)
 import Json.Encode as JE
 
 main =
@@ -142,7 +142,7 @@ viewTransactionList transactionList =
 viewTransaction : Transaction -> Html Msg
 viewTransaction transaction =
     tr [] [ td [] [ text transaction.date ]
-          , td [] [ text transaction.amount ]
+          , td [] [ text (String.fromFloat transaction.amount) ]
           , td [] [ text transaction.description ]
           , td [] [ input
                         [ placeholder "Enter some tags..."
@@ -166,7 +166,7 @@ type alias Transaction =
   { tagsUpdated : Bool
   , id : String
   , date : String
-  , amount : String
+  , amount : Float
   , description : String
   , tags : String
   }
@@ -176,7 +176,7 @@ transactionDecoder =
   JD.map5 (Transaction False)
       (field "id" string)
       (field "date" string)
-      (field "amount" string)
+      (field "amount" float)
       (field "description" string)
       (field "tags" string)
 

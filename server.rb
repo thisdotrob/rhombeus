@@ -4,6 +4,7 @@ require 'sinatra'
 require 'json'
 
 conn = PG.connect( dbname: 'postgres' )
+conn.type_map_for_results = PG::BasicTypeMapForResults.new conn
 
 amex_query = 'SELECT at.reference as id, '\
              '       at.transaction_date as date, '\
@@ -59,6 +60,7 @@ get '/amex/transactions' do
     result.each do |row|
       response.push row
     end
+    response.each { |r| r['amount'] = r['amount'] / 100.0 }
     response.to_json
   end
 end
@@ -69,6 +71,7 @@ get '/starling/transactions' do
     result.each do |row|
       response.push row
     end
+    response.each { |r| r['amount'] = r['amount'] / 100.0 }
     response.to_json
   end
 end
