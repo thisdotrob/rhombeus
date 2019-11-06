@@ -10,7 +10,7 @@ Ruby (v2.6.5) Postgres (v11.5) Elm (v0.19)
 
 Install the dependencies with `bundle install`.
 
-Compile the Elm source with `make Main.elm Tags.elm`.
+Compile the Elm source with `make Main.elm Tags.elm Filter.elm`.
 
 Start the server with `ruby server.rb`.
 

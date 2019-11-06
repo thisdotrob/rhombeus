@@ -1,3 +1,4 @@
 elm-stuff
 public/main.js
-public/update_tags.js
+public/tags.js
+public/filter.js

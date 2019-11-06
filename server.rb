@@ -6,11 +6,11 @@ require 'json'
 conn = PG.connect( dbname: 'postgres' )
 conn.type_map_for_results = PG::BasicTypeMapForResults.new conn
 
-amex_query = 'SELECT at.reference as id, '\
+amex_query = 'SELECT CAST(at.reference as TEXT) as id, '\
              '       at.transaction_date as date, '\
              '       at.minor_units as amount, '\
              '       at.counter_party_name as description, '\
-             'COALESCE(string_agg(t.value, \' \'), \'\') AS tags '\
+             '       COALESCE(string_agg(t.value, \' \'), \'\') AS tags '\
              'FROM amex_transactions AS at '\
              'LEFT JOIN amex_transactions_tags AS att '\
              'ON at.reference = att.transaction_id '\
@@ -19,11 +19,11 @@ amex_query = 'SELECT at.reference as id, '\
              'GROUP BY at.reference '\
              'ORDER BY at.transaction_date DESC;'
 
-starling_query = 'SELECT st.feed_item_uid as id, '\
+starling_query = 'SELECT CAST(st.feed_item_uid as TEXT) as id, '\
                  '       st.transaction_time as date, '\
                  '       st.minor_units as amount, '\
                  '       st.counter_party_name as description, '\
-                 'COALESCE(string_agg(t.value, \' \'), \'\') AS tags '\
+                 '       COALESCE(string_agg(t.value, \' \'), \'\') AS tags '\
                  'FROM starling_transactions AS st '\
                  'LEFT JOIN starling_transactions_tags AS stt '\
                  'ON st.feed_item_uid = stt.transaction_id '\
@@ -31,6 +31,45 @@ starling_query = 'SELECT st.feed_item_uid as id, '\
                  'ON t.id = stt.tag_id '\
                  'GROUP BY st.feed_item_uid '\
                  'ORDER BY st.transaction_time DESC;'
+
+def all_transactions_query (tags)
+  tags = tags.split
+  tags = tags.map { |tag| "'" + tag + "'" }.join(',')
+  amex_tag_filter = ''
+  starling_tag_filter = ''
+  if tags != ''
+    amex_tag_filter = 'WHERE att.tag_id IN (SELECT id FROM tags WHERE value IN (' + tags + '))'
+    starling_tag_filter = 'WHERE stt.tag_id IN (SELECT id FROM tags WHERE value IN (' + tags + '))'
+  end
+  'SELECT CAST(at.reference as TEXT) as id, '\
+  '       at.transaction_date as date, '\
+  '       at.minor_units as amount, '\
+  '       at.counter_party_name as description, '\
+  '       COALESCE(string_agg(t.value, \' \'), \'\') AS tags, '\
+  '       \'amex\' as source '\
+  'FROM amex_transactions AS at '\
+  'LEFT JOIN amex_transactions_tags AS att '\
+  'ON at.reference = att.transaction_id '\
+  'LEFT JOIN tags AS t '\
+  'ON t.id = att.tag_id '\
+  '' + amex_tag_filter + ' '\
+  'GROUP BY at.reference '\
+  'UNION '\
+  'SELECT CAST(st.feed_item_uid as TEXT) as id, '\
+  '       st.transaction_time as date, '\
+  '       st.minor_units as amount, '\
+  '       st.counter_party_name as description, '\
+  '       COALESCE(string_agg(t.value, \' \'), \'\') AS tags, '\
+  '       \'starling\' as source '\
+  'FROM starling_transactions AS st '\
+  'LEFT JOIN starling_transactions_tags AS stt '\
+  'ON st.feed_item_uid = stt.transaction_id '\
+  'LEFT JOIN tags AS t '\
+  'ON t.id = stt.tag_id '\
+  '' + starling_tag_filter + ' '\
+  'GROUP BY st.feed_item_uid '\
+  'ORDER BY date DESC;'
+end
 
 def upsert_tags_query (tags)
   'INSERT INTO tags (value) VALUES ' + tags.map { |tag| "('" + tag + "')" }.join(",") + 'ON CONFLICT (value) DO UPDATE ' + 'SET value = EXCLUDED.value ' + 'RETURNING id, value;'
@@ -54,6 +93,10 @@ get '/tags' do
   send_file File.join(settings.public_folder, 'tags.html')
 end
 
+get '/filter' do
+  send_file File.join(settings.public_folder, 'filter.html')
+end
+
 get '/amex/transactions' do
   conn.exec(amex_query) do |result|
     response = []
@@ -67,6 +110,18 @@ end
 
 get '/starling/transactions' do
   conn.exec(starling_query) do |result|
+    response = []
+    result.each do |row|
+      response.push row
+    end
+    response.each { |r| r['amount'] = r['amount'] / 100.0 }
+    response.to_json
+  end
+end
+
+get '/all/transactions' do
+  tags = params[:tags]
+  conn.exec(all_transactions_query(tags)) do |result|
     response = []
     result.each do |row|
       response.push row

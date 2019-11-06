@@ -3,3 +3,6 @@ Main.elm:
 
 Tags.elm:
 	elm make src/Tags.elm --output=public/tags.js
+
+Filter.elm:
+	elm make src/Filter.elm --output=public/filter.js
