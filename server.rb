@@ -42,7 +42,7 @@ def all_transactions_query (tags)
     starling_tag_filter = 'WHERE stt.tag_id IN (SELECT id FROM tags WHERE value IN (' + tags + '))'
   end
   'SELECT CAST(at.reference as TEXT) as id, '\
-  '       at.transaction_date as date, '\
+  '       FLOOR(EXTRACT(epoch from at.transaction_date) * 1000) as date, '\
   '       at.minor_units as amount, '\
   '       at.counter_party_name as description, '\
   '       COALESCE(string_agg(t.value, \' \'), \'\') AS tags, '\
@@ -56,7 +56,7 @@ def all_transactions_query (tags)
   'GROUP BY at.reference '\
   'UNION '\
   'SELECT CAST(st.feed_item_uid as TEXT) as id, '\
-  '       st.transaction_time as date, '\
+  '       FLOOR(EXTRACT(epoch from st.transaction_time) * 1000) as date, '\
   '       st.minor_units as amount, '\
   '       st.counter_party_name as description, '\
   '       COALESCE(string_agg(t.value, \' \'), \'\') AS tags, '\
