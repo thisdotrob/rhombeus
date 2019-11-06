@@ -6,31 +6,37 @@ require 'json'
 conn = PG.connect( dbname: 'postgres' )
 conn.type_map_for_results = PG::BasicTypeMapForResults.new conn
 
-amex_query = 'SELECT CAST(at.reference as TEXT) as id, '\
-             '       at.transaction_date as date, '\
-             '       at.minor_units as amount, '\
-             '       at.counter_party_name as description, '\
-             '       COALESCE(string_agg(t.value, \' \'), \'\') AS tags '\
-             'FROM amex_transactions AS at '\
-             'LEFT JOIN amex_transactions_tags AS att '\
-             'ON at.reference = att.transaction_id '\
-             'LEFT JOIN tags AS t '\
-             'ON t.id = att.tag_id '\
-             'GROUP BY at.reference '\
-             'ORDER BY at.transaction_date DESC;'
+def amex_query (search)
+  'SELECT CAST(at.reference as TEXT) as id, '\
+  '       at.transaction_date as date, '\
+  '       at.minor_units as amount, '\
+  '       at.counter_party_name as description, '\
+  '       COALESCE(string_agg(t.value, \' \'), \'\') AS tags '\
+  'FROM amex_transactions AS at '\
+  'LEFT JOIN amex_transactions_tags AS att '\
+  'ON at.reference = att.transaction_id '\
+  'LEFT JOIN tags AS t '\
+  'ON t.id = att.tag_id '\
+  'WHERE at.counter_party_name LIKE \'%' + search + '%\' '\
+  'GROUP BY at.reference '\
+  'ORDER BY at.transaction_date DESC;'
+end
 
-starling_query = 'SELECT CAST(st.feed_item_uid as TEXT) as id, '\
-                 '       st.transaction_time as date, '\
-                 '       st.minor_units as amount, '\
-                 '       st.counter_party_name as description, '\
-                 '       COALESCE(string_agg(t.value, \' \'), \'\') AS tags '\
-                 'FROM starling_transactions AS st '\
-                 'LEFT JOIN starling_transactions_tags AS stt '\
-                 'ON st.feed_item_uid = stt.transaction_id '\
-                 'LEFT JOIN tags AS t '\
-                 'ON t.id = stt.tag_id '\
-                 'GROUP BY st.feed_item_uid '\
-                 'ORDER BY st.transaction_time DESC;'
+def starling_query (search)
+  'SELECT CAST(st.feed_item_uid as TEXT) as id, '\
+  '       st.transaction_time as date, '\
+  '       st.minor_units as amount, '\
+  '       st.counter_party_name as description, '\
+  '       COALESCE(string_agg(t.value, \' \'), \'\') AS tags '\
+  'FROM starling_transactions AS st '\
+  'LEFT JOIN starling_transactions_tags AS stt '\
+  'ON st.feed_item_uid = stt.transaction_id '\
+  'LEFT JOIN tags AS t '\
+  'ON t.id = stt.tag_id '\
+  'WHERE st.counter_party_name LIKE \'%' + search + '%\' '\
+  'GROUP BY st.feed_item_uid '\
+  'ORDER BY st.transaction_time DESC;'
+end
 
 def all_transactions_query (tags)
   tags = tags.split
@@ -76,12 +82,14 @@ def upsert_tags_query (tags)
 end
 
 def insert_amex_tags_query(transaction_id, tag_ids)
-  values = tag_ids.map { |id| "('" + id + "', '" + transaction_id +  "')" }.join(",")
+  puts transaction_id
+  puts tag_ids
+  values = tag_ids.map { |id| "('" + id.to_s + "', '" + transaction_id +  "')" }.join(",")
   "INSERT INTO amex_transactions_tags (tag_id, transaction_id) VALUES " + values
 end
 
 def insert_starling_tags_query(transaction_id, tag_ids)
-  values = tag_ids.map { |id| "('" + id + "', '" + transaction_id +  "')" }.join(",")
+  values = tag_ids.map { |id| "('" + id.to_s + "', '" + transaction_id +  "')" }.join(",")
   "INSERT INTO starling_transactions_tags (tag_id, transaction_id) VALUES " + values
 end
 
@@ -98,7 +106,8 @@ get '/filter' do
 end
 
 get '/amex/transactions' do
-  conn.exec(amex_query) do |result|
+  search = params[:search]
+  conn.exec(amex_query(search)) do |result|
     response = []
     result.each do |row|
       response.push row
@@ -109,7 +118,8 @@ get '/amex/transactions' do
 end
 
 get '/starling/transactions' do
-  conn.exec(starling_query) do |result|
+  search = params[:search]
+  conn.exec(starling_query(search)) do |result|
     response = []
     result.each do |row|
       response.push row
@@ -167,7 +177,8 @@ post '/amex/update_tags' do
       conn.exec(insert_amex_tags_query(transaction_id, tag_ids))
     end
   end
-  conn.exec(amex_query) do |result|
+  search = params[:search]
+  conn.exec(amex_query(search)) do |result|
     response = []
     result.each do |row|
       response.push row
@@ -186,7 +197,8 @@ post '/starling/update_tags' do
       conn.exec(insert_starling_tags_query(transaction_id, tag_ids))
     end
   end
-  conn.exec(starling_query) do |result|
+  search = params[:search]
+  conn.exec(starling_query(search)) do |result|
     response = []
     result.each do |row|
       response.push row

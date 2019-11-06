@@ -24,12 +24,13 @@ type alias Model
   = { transactions : (List Transaction)
     , status : Status
     , source : Source
+    , search : String
     }
 
 init : () -> (Model, Cmd Msg)
 init _ =
-  ({ status = Loading , transactions = [], source = Amex }
-  , getTransactions Amex)
+  ({ status = Loading , transactions = [], source = Amex, search = "" }
+  , getTransactions Amex "")
 
 type Msg
   = GetTransactions
@@ -37,12 +38,13 @@ type Msg
   | UpdateTags String String
   | PostTags
   | SwitchSource Source
+  | UpdateSearchTerm String
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
     GetTransactions ->
-      ({ model | status = Loading }, getTransactions model.source)
+      ({ model | status = Loading }, getTransactions model.source model.search)
 
     GotTransactions result ->
       case result of
@@ -65,10 +67,13 @@ update msg model =
 
     PostTags ->
         ({ model | status = Loading }
-        , postTags model.source (List.filter (\t -> t.tagsUpdated) model.transactions))
+        , postTags model.source (List.filter (\t -> t.tagsUpdated) model.transactions) model.search)
 
     SwitchSource newSource ->
-        ({ model | source = newSource }, getTransactions newSource)
+        ({ model | source = newSource }, getTransactions newSource model.search)
+
+    UpdateSearchTerm newTerm ->
+        ({ model | search = newTerm }, getTransactions model.source newTerm)
 
 getErrMsg : Http.Error -> String
 getErrMsg err =
@@ -118,7 +123,9 @@ viewBody model =
       text "Loading..."
 
     Success ->
-      div [] [ button [ onClick PostTags ] [ text "Save" ]
+      div [] [ input [ placeholder "Filter by description", value model.search, onInput UpdateSearchTerm ] []
+             , div [ class "verticalDivider"] []
+             , button [ onClick PostTags ] [ text "Save" ]
              , button [ onClick (SwitchSource (case model.source of
                                                   Amex -> Starling
                                                   Starling -> Amex))] [ text "Switch source" ]
@@ -153,12 +160,12 @@ viewTransaction transaction =
                   ]
           ]
 
-getTransactions : Source -> Cmd Msg
-getTransactions source =
+getTransactions : Source -> String -> Cmd Msg
+getTransactions source search =
   Http.get
     { url = case source of
-                Starling -> "http://localhost:4567/starling/transactions"
-                Amex -> "http://localhost:4567/amex/transactions"
+                Starling -> "http://localhost:4567/starling/transactions?search=" ++ search
+                Amex -> "http://localhost:4567/amex/transactions?search=" ++ search
     , expect = Http.expectJson GotTransactions transactionListDecoder
     }
 
@@ -188,11 +195,11 @@ transactionEncoder : Transaction -> List (String, JE.Value)
 transactionEncoder t =
   [("id", JE.string t.id), ("tags", JE.string t.tags)]
 
-postTags : Source -> List Transaction -> Cmd Msg
-postTags source transactions =
+postTags : Source -> List Transaction -> String -> Cmd Msg
+postTags source transactions search =
     Http.post
         { url = case source of
-                    Starling -> "http://localhost:4567/starling/update_tags"
-                    Amex -> "http://localhost:4567/amex/update_tags"
+                    Starling -> "http://localhost:4567/starling/update_tags?search=" ++ search
+                    Amex -> "http://localhost:4567/amex/update_tags?search=" ++ search
         , expect = Http.expectJson GotTransactions transactionListDecoder
         , body = Http.jsonBody (JE.list JE.object (List.map transactionEncoder transactions)) }
