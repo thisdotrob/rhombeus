@@ -43,24 +43,28 @@ update msg model =
             case result of
                 Ok _ ->
                     ({ model | content = "Success!" }, getTags)
-                Err _ ->
-                    ({ model | content = "Failure!" }, Cmd.none)
+                Err e ->
+                    let errMsg = (getErrMsg e)
+                    in
+                    ({ model | content = "Failure! " ++ errMsg }, Cmd.none)
         GotTags result ->
             case result of
                 Ok tags ->
                     ({ model | tags = tags }, Cmd.none)
-                Err _ ->
-                    ({ model | content = "Failure!" }, Cmd.none)
+                Err e ->
+                    let errMsg = (getErrMsg e)
+                    in
+                    ({ model | content = "Failure! " ++ errMsg }, Cmd.none)
         Delete tag ->
                     ({ model | content = "Deleting..." }, (deleteTag tag))
         DeletedTag result ->
             case result of
                 Ok _ ->
                     ({ model | content = "Success!" }, getTags)
-                Err _ ->
-                    ({ model | content = "Failure!" }, Cmd.none)
-
-
+                Err e ->
+                    let errMsg = (getErrMsg e)
+                    in
+                    ({ model | content = "Failure! " ++ errMsg }, Cmd.none)
 
 subscriptions : Model -> Sub Msg
 subscriptions model = Sub.none
@@ -87,7 +91,7 @@ getTags =
 
 type alias Tag =
     { value : String
-    , id : String
+    , id : Int
     }
 
 tagsDecoder : Decoder (List Tag)
@@ -96,7 +100,7 @@ tagsDecoder = JD.list tagDecoder
 tagDecoder : Decoder Tag
 tagDecoder = JD.map2 Tag
              (JD.field "value" JD.string)
-             (JD.field "id" JD.string)
+             (JD.field "id" JD.int)
 
 submitTags : String -> Cmd Msg
 submitTags tags =
@@ -111,5 +115,14 @@ deleteTag tag =
     Http.post
         { url = "http://localhost:4567/delete_tag"
         , expect = Http.expectString DeletedTag
-        , body = Http.stringBody "text/plain" tag.id
+        , body = Http.stringBody "text/plain" (String.fromInt tag.id)
         }
+
+getErrMsg : Http.Error -> String
+getErrMsg err =
+    case err of
+        Http.BadUrl msg -> msg
+        Http.Timeout -> "Timeout"
+        Http.NetworkError -> "Network error"
+        Http.BadStatus status -> "Bad status: " ++ (String.fromInt status)
+        Http.BadBody msg -> msg
