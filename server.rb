@@ -81,9 +81,11 @@ def upsert_tags_query (tags)
   'INSERT INTO tags (value) VALUES ' + tags.map { |tag| "('" + tag + "')" }.join(",") + 'ON CONFLICT (value) DO UPDATE ' + 'SET value = EXCLUDED.value ' + 'RETURNING id, value;'
 end
 
+def drop_amex_tags_query(transaction_id)
+  "DELETE FROM amex_transactions_tags WHERE transaction_id = '" + transaction_id + "'"
+end
+
 def insert_amex_tags_query(transaction_id, tag_ids)
-  puts transaction_id
-  puts tag_ids
   values = tag_ids.map { |id| "('" + id.to_s + "', '" + transaction_id +  "')" }.join(",")
   "INSERT INTO amex_transactions_tags (tag_id, transaction_id) VALUES " + values
 end
@@ -174,6 +176,7 @@ post '/amex/update_tags' do
     tags =  update["tags"].split
     conn.exec(upsert_tags_query(tags)) do |tags|
       tag_ids = tags.map { |t| t["id"] }
+      conn.exec(drop_amex_tags_query(transaction_id))
       conn.exec(insert_amex_tags_query(transaction_id, tag_ids))
     end
   end
