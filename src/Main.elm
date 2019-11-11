@@ -25,11 +25,12 @@ type alias Model
     , status : Status
     , source : Source
     , search : String
+    , bulkTags : String
     }
 
 init : () -> (Model, Cmd Msg)
 init _ =
-  ({ status = Loading , transactions = [], source = Amex, search = "" }
+  ({ status = Loading , transactions = [], source = Amex, search = "", bulkTags = "" }
   , getTransactions Amex "")
 
 type Msg
@@ -37,8 +38,10 @@ type Msg
   | GotTransactions (Result Http.Error (List Transaction))
   | UpdateTags String String
   | PostTags
+  | BulkPostTags
   | SwitchSource Source
   | UpdateSearchTerm String
+  | UpdateBulkTags String
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -69,11 +72,19 @@ update msg model =
         ({ model | status = Loading }
         , postTags model.source (List.filter (\t -> t.tagsUpdated) model.transactions) model.search)
 
+    BulkPostTags ->
+        ({ model | status = Loading }
+        , postTags model.source (List.map (\t -> { t | tags = t.tags ++ " " ++ model.bulkTags }) model.transactions) model.search)
+
     SwitchSource newSource ->
         ({ model | source = newSource }, getTransactions newSource model.search)
 
     UpdateSearchTerm newTerm ->
         ({ model | search = newTerm }, getTransactions model.source newTerm)
+
+    UpdateBulkTags newBulkTags ->
+        ({ model
+             | bulkTags = newBulkTags }, Cmd.none)
 
 getErrMsg : Http.Error -> String
 getErrMsg err =
@@ -129,6 +140,9 @@ viewBody model =
              , button [ onClick (SwitchSource (case model.source of
                                                   Amex -> Starling
                                                   Starling -> Amex))] [ text "Switch source" ]
+             , div [ class "verticalDivider" ] []
+             , input [ placeholder "Bulk add tags", value model.bulkTags, onInput UpdateBulkTags ] []
+             , button [ onClick BulkPostTags ] [ text "Save" ]
              , div [ class "verticalDivider"] []
              , viewTransactionList model.transactions
              ]
