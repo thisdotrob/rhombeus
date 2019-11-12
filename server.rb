@@ -26,6 +26,7 @@ def starling_query (search)
   'SELECT CAST(st.feed_item_uid as TEXT) as id, '\
   '       st.transaction_time as date, '\
   '       st.minor_units as amount, '\
+  '       st.direction as direction, '\
   '       st.counter_party_name as description, '\
   '       COALESCE(string_agg(t.value, \' \'), \'\') AS tags '\
   'FROM starling_transactions AS st '\
@@ -50,6 +51,7 @@ def all_transactions_query (tags)
   'SELECT CAST(at.reference as TEXT) as id, '\
   '       FLOOR(EXTRACT(epoch from at.transaction_date) * 1000) as date, '\
   '       at.minor_units as amount, '\
+  '       \'n.a.\' as direction, '\
   '       at.counter_party_name as description, '\
   '       COALESCE(string_agg(t.value, \' \'), \'\') AS tags, '\
   '       \'amex\' as source '\
@@ -64,6 +66,7 @@ def all_transactions_query (tags)
   'SELECT CAST(st.feed_item_uid as TEXT) as id, '\
   '       FLOOR(EXTRACT(epoch from st.transaction_time) * 1000) as date, '\
   '       st.minor_units as amount, '\
+  '       st.direction as direction, '\
   '       st.counter_party_name as description, '\
   '       COALESCE(string_agg(t.value, \' \'), \'\') AS tags, '\
   '       \'starling\' as source '\
@@ -85,6 +88,10 @@ def drop_amex_tags_query(transaction_id)
   "DELETE FROM amex_transactions_tags WHERE transaction_id = '" + transaction_id + "'"
 end
 
+def drop_starling_tags_query(transaction_id)
+  "DELETE FROM starling_transactions_tags WHERE transaction_id = '" + transaction_id + "'"
+end
+
 def insert_amex_tags_query(transaction_id, tag_ids)
   values = tag_ids.map { |id| "('" + id.to_s + "', '" + transaction_id +  "')" }.join(",")
   "INSERT INTO amex_transactions_tags (tag_id, transaction_id) VALUES " + values
@@ -93,6 +100,46 @@ end
 def insert_starling_tags_query(transaction_id, tag_ids)
   values = tag_ids.map { |id| "('" + id.to_s + "', '" + transaction_id +  "')" }.join(",")
   "INSERT INTO starling_transactions_tags (tag_id, transaction_id) VALUES " + values
+end
+
+def get_amex_transactions(conn, search)
+  conn.exec(amex_query(search)) do |result|
+    response = []
+    result.each do |row|
+      row['amount'] = row['amount'] / 100.0
+      response.push row
+    end
+    response
+  end
+end
+
+def get_starling_transactions(conn, search)
+  conn.exec(starling_query(search)) do |result|
+    response = []
+    result.each do |row|
+      row['amount'] = row['amount'] / 100.0
+      if row['direction'] == 'IN'
+        row['amount'] = -1 * row['amount']
+      end
+      response.push row
+    end
+    response
+  end
+end
+
+def get_all_transactions(conn, tags)
+  conn.exec(all_transactions_query(tags)) do |result|
+    response = []
+    result.each do |row|
+      row['amount'] = row['amount'] / 100.0
+      if row['source'] == 'starling' and row['direction'] == 'IN'
+        row['amount'] = -1 * row['amount']
+      end
+      response.push row
+    end
+    response
+  end
+
 end
 
 get '/' do
@@ -109,38 +156,20 @@ end
 
 get '/amex/transactions' do
   search = params[:search]
-  conn.exec(amex_query(search)) do |result|
-    response = []
-    result.each do |row|
-      response.push row
-    end
-    response.each { |r| r['amount'] = r['amount'] / 100.0 }
-    response.to_json
-  end
+  response = get_amex_transactions(conn, search)
+  response.to_json
 end
 
 get '/starling/transactions' do
   search = params[:search]
-  conn.exec(starling_query(search)) do |result|
-    response = []
-    result.each do |row|
-      response.push row
-    end
-    response.each { |r| r['amount'] = r['amount'] / 100.0 }
-    response.to_json
-  end
+  response = get_starling_transactions(conn, search)
+  response.to_json
 end
 
 get '/all/transactions' do
   tags = params[:tags]
-  conn.exec(all_transactions_query(tags)) do |result|
-    response = []
-    result.each do |row|
-      response.push row
-    end
-    response.each { |r| r['amount'] = r['amount'] / 100.0 }
-    response.to_json
-  end
+  response = get_all_transactions(conn, tags)
+  response.to_json
 end
 
 get '/tags/all' do
@@ -181,13 +210,8 @@ post '/amex/update_tags' do
     end
   end
   search = params[:search]
-  conn.exec(amex_query(search)) do |result|
-    response = []
-    result.each do |row|
-      response.push row
-    end
-    response.to_json
-  end
+  response = get_amex_transactions(conn, search)
+  response.to_json
 end
 
 post '/starling/update_tags' do
@@ -197,15 +221,11 @@ post '/starling/update_tags' do
     tags =  update["tags"].split
     conn.exec(upsert_tags_query(tags)) do |tags|
       tag_ids = tags.map { |t| t["id"] }
+      conn.exec(drop_starling_tags_query(transaction_id))
       conn.exec(insert_starling_tags_query(transaction_id, tag_ids))
     end
   end
   search = params[:search]
-  conn.exec(starling_query(search)) do |result|
-    response = []
-    result.each do |row|
-      response.push row
-    end
-    response.to_json
-  end
+  response = get_starling_transactions(conn, search)
+  response.to_json
 end
