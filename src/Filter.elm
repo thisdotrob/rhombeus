@@ -26,24 +26,36 @@ type alias Model
     , total : Float
     , avgPerMonth : Float
     , monthsDiff : Float
+    , dateFrom : String
+    , dateTo : String
     }
 
 init : () -> (Model, Cmd Msg)
 init _ =
-  ({ status = Loading , transactions = [], tags = "", total = 0.0, avgPerMonth = 0.0, monthsDiff = 0.0 }
-  , getTransactions ""
-  )
+    let model = { status = Loading
+                , transactions = []
+                , tags = ""
+                , total = 0.0
+                , avgPerMonth = 0.0
+                , monthsDiff = 0.0
+                , dateFrom = ""
+                , dateTo = ""
+                }
+    in
+        (model, getTransactions model)
 
 type Msg
   = GetTransactions
   | GotTransactions (Result Http.Error (List Transaction))
   | UpdateSearchTerm String
+  | UpdateDateFrom String
+  | UpdateDateTo String
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
     GetTransactions ->
-      ({ model | status = Loading }, getTransactions model.tags)
+      ({ model | status = Loading }, getTransactions model)
 
     GotTransactions result ->
       case result of
@@ -58,7 +70,19 @@ update msg model =
             ({ model | status = Failure errMsg }, Cmd.none)
 
     UpdateSearchTerm newTags ->
-        ({ model | tags = newTags }, getTransactions newTags)
+        let newModel = { model | tags = newTags }
+        in
+        (newModel, getTransactions newModel)
+
+    UpdateDateFrom newDate ->
+        let newModel = { model | dateFrom = newDate }
+        in
+        (newModel, getTransactions newModel)
+
+    UpdateDateTo newDate ->
+        let newModel = { model | dateTo = newDate }
+        in
+        (newModel, getTransactions newModel)
 
 getErrMsg : Http.Error -> String
 getErrMsg err =
@@ -99,6 +123,10 @@ viewBody model =
 
     Success ->
         div [] [ input [ placeholder "Filter by tags", value model.tags, onInput UpdateSearchTerm ] []
+               , div [ class "verticalDivider" ] []
+               , input [ placeholder "Date from", value model.dateFrom, onInput UpdateDateFrom ] []
+               , div [ class "verticalDivider" ] []
+               , input [ placeholder "Date to", value model.dateTo, onInput UpdateDateTo ] []
                , viewTransactionList model.transactions
                , viewSummaryStats model.total model.avgPerMonth model.monthsDiff
                ]
@@ -156,10 +184,20 @@ viewSummaryStats total avgPerMonth monthsDiff =
         ]
     ]
 
-getTransactions : String -> Cmd Msg
-getTransactions tags =
+getTransactionsQueryParams : Model -> String
+getTransactionsQueryParams model =
+   String.concat [ "tags="
+                , model.tags
+                , "&date_from="
+                , model.dateFrom
+                , "&date_to="
+                , model.dateTo
+                ]
+
+getTransactions : Model -> Cmd Msg
+getTransactions model =
   Http.get
-    { url = String.append "http://localhost:4567/all/transactions?tags=" tags
+    { url = "http://localhost:4567/all/transactions?" ++ (getTransactionsQueryParams model)
     , expect = Http.expectJson GotTransactions transactionListDecoder
     }
 

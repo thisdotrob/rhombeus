@@ -39,14 +39,34 @@ def starling_query (search)
   'ORDER BY st.transaction_time DESC;'
 end
 
-def all_transactions_query (tags)
+def valid_date_str(str)
+  /\d{4}-\d{2}-\d{2}/ === str
+end
+
+def all_transactions_query (tags, date_from, date_to)
   tags = tags.split
   tags = tags.map { |tag| "'" + tag + "'" }.join(',')
-  amex_tag_filter = ''
-  starling_tag_filter = ''
+  amex_filters = []
+  starling_filters = []
   if tags != ''
-    amex_tag_filter = 'WHERE att.tag_id IN (SELECT id FROM tags WHERE value IN (' + tags + '))'
-    starling_tag_filter = 'WHERE stt.tag_id IN (SELECT id FROM tags WHERE value IN (' + tags + '))'
+    amex_filters.push 'att.tag_id IN (SELECT id FROM tags WHERE value IN (' + tags + '))'
+    starling_filters.push 'stt.tag_id IN (SELECT id FROM tags WHERE value IN (' + tags + '))'
+  end
+  if date_from != '' and valid_date_str(date_from)
+    amex_filters.push "at.transaction_date >= '" + date_from + "'"
+    starling_filters.push "st.transaction_time >= '" + date_from + "'"
+  end
+  if date_to != '' and valid_date_str(date_to)
+    amex_filters.push "at.transaction_date <= '" + date_to + "'"
+    starling_filters.push "st.transaction_time <= '" + date_to + "'"
+  end
+  amex_filter_str = ''
+  if amex_filters.length > 0
+    amex_filter_str = 'WHERE ' + amex_filters.join(' AND ')
+  end
+  starling_filter_str = ''
+  if starling_filters.length > 0
+    starling_filter_str = 'WHERE ' + starling_filters.join(' AND ')
   end
   'SELECT CAST(at.reference as TEXT) as id, '\
   '       FLOOR(EXTRACT(epoch from at.transaction_date) * 1000) as date, '\
@@ -60,7 +80,7 @@ def all_transactions_query (tags)
   'ON at.reference = att.transaction_id '\
   'LEFT JOIN tags AS t '\
   'ON t.id = att.tag_id '\
-  '' + amex_tag_filter + ' '\
+  '' + amex_filter_str + ' '\
   'GROUP BY at.reference '\
   'UNION '\
   'SELECT CAST(st.feed_item_uid as TEXT) as id, '\
@@ -75,7 +95,7 @@ def all_transactions_query (tags)
   'ON st.feed_item_uid = stt.transaction_id '\
   'LEFT JOIN tags AS t '\
   'ON t.id = stt.tag_id '\
-  '' + starling_tag_filter + ' '\
+  '' + starling_filter_str + ' '\
   'GROUP BY st.feed_item_uid '\
   'ORDER BY date DESC;'
 end
@@ -127,8 +147,8 @@ def get_starling_transactions(conn, search)
   end
 end
 
-def get_all_transactions(conn, tags)
-  conn.exec(all_transactions_query(tags)) do |result|
+def get_all_transactions(conn, tags, date_from, date_to)
+  conn.exec(all_transactions_query(tags, date_from, date_to)) do |result|
     response = []
     result.each do |row|
       row['amount'] = row['amount'] / 100.0
@@ -167,8 +187,11 @@ get '/starling/transactions' do
 end
 
 get '/all/transactions' do
+  puts params
   tags = params[:tags]
-  response = get_all_transactions(conn, tags)
+  date_from = params[:date_from]
+  date_to = params[:date_to]
+  response = get_all_transactions(conn, tags, date_from, date_to)
   response.to_json
 end
 
