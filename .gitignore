@@ -2,3 +2,4 @@ elm-stuff
 public/main.js
 public/tags.js
 public/filter.js
+.env

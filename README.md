@@ -1,17 +1,49 @@
 # RHOMBEUS
 
-An Elm/Ruby program to manage tags for financial transactions in Postgres
+An Elm/Clojure program to manage tags for financial transactions in Postgres
 
-# Requirements
+## Requirements
 
-Ruby (v2.6.5) Postgres (v11.5) Elm (v0.19)
+Clojure (v1.10.1) Postgres (v11.5) Elm (v0.19)
 
-# Usage
+## Development
+### Starting
+Change into the `client` directory and compile the Elm source with:
+```
+make Main.elm Tags.elm Filter.elm
+```
 
-Install the dependencies with `bundle install`.
+Change into the `server` directory and Start the server compiler, repl and service:
+```
+clojure -A:dev -m rebel-readline.main
+(start-dev)
+```
 
-Compile the Elm source with `make Main.elm Tags.elm Filter.elm`.
+Navigate to `http://localhost:8891`.
 
-Start the server with `ruby server.rb`.
+### Restarting
+From the Clojure repl:
+```
+(stop-dev)
+(refresh)
+(start-dev)
+```
 
-Navigate to `http://localhost:4567`.
+## Prod build
+
+Change into the `client` directory and compile the Elm source with:
+```
+make Main.elm Tags.elm Filter.elm
+```
+
+Change into the `server` directory and create the uberjar:
+```
+./uberdeps/package.sh
+```
+
+This will create `target/rhombeus.jar`.
+
+To run it:
+```
+java -cp target/rhombeus.jar clojure.main -m rhombeus.core
+```
